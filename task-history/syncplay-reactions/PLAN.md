@@ -1,4 +1,9 @@
-# SyncPlay reactions: implementation plan
+# SyncPlay reactions: historical implementation plan
+
+This is the original design record, not a current task checklist. Earlier proposals
+(such as a one-second limit and a sender label) were superseded by the implemented
+300 ms limit and emoji-only overlay. See [README.md](README.md) for current behavior,
+recorded verification, and remaining checks.
 
 ## Goal
 

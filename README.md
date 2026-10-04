@@ -48,6 +48,12 @@ Check out our <a href="https://translate.jellyfin.org">Weblate instance</a> to h
 
 ---
 
+## Developing this fork
+
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the paired frontend/backend setup,
+[AGENTS.md](AGENTS.md) for repository guidance, and
+[feature development](docs/FEATURE_DEVELOPMENT.md) for extending both forks.
+
 ## Jellyfin Server
 
 This repository contains the code for Jellyfin's backend server. Note that this is only one of many projects under the Jellyfin GitHub [organization](https://github.com/jellyfin/) on GitHub. If you want to contribute, you can start by checking out our [documentation](https://jellyfin.org/docs/general/contributing/index.html) to see what to work on.
