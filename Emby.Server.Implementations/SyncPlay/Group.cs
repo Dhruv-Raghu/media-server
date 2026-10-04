@@ -446,6 +446,35 @@ namespace Emby.Server.Implementations.SyncPlay
             return Task.WhenAll(GetTasks());
         }
 
+        /// <summary>
+        /// Sends a transient reaction to every session in the group.
+        /// </summary>
+        /// <param name="session">The sending session.</param>
+        /// <param name="reactionId">The validated reaction identifier.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <param name="broadcastTask">The task that broadcasts the update.</param>
+        /// <returns>The delivery result.</returns>
+        /// <remarks>Call while holding the group lock.</remarks>
+        public ReactionSendResult TrySendReaction(SessionInfo session, string reactionId, CancellationToken cancellationToken, out Task broadcastTask)
+        {
+            broadcastTask = Task.CompletedTask;
+            if (!_participants.TryGetValue(session.Id, out var member))
+            {
+                return ReactionSendResult.NotInGroup;
+            }
+
+            var now = DateTime.UtcNow;
+            if (now - member.LastReactionUtc < TimeSpan.FromMilliseconds(300))
+            {
+                return ReactionSendResult.RateLimited;
+            }
+
+            member.LastReactionUtc = now;
+            var data = new ReactionData(reactionId, member.UserId, member.UserName);
+            broadcastTask = SendGroupUpdate(session, SyncPlayBroadcastType.AllGroup, new SyncPlayReactionUpdate(GroupId, data), cancellationToken);
+            return ReactionSendResult.Sent;
+        }
+
         /// <inheritdoc />
         public Task SendCommand(SessionInfo from, SyncPlayBroadcastType type, SendCommand message, CancellationToken cancellationToken)
         {

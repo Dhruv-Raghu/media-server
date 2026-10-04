@@ -5,6 +5,7 @@ using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Controller.SyncPlay;
 using MediaBrowser.Controller.SyncPlay.PlaybackRequests;
 using MediaBrowser.Controller.SyncPlay.Requests;
 using MediaBrowser.Model.SyncPlay;
@@ -82,6 +83,47 @@ public class SyncPlayManagerTests
             await harness.WaitForState(harness.Session, info.GroupId, GroupStateType.Playing));
     }
 
+    [Fact]
+    public async Task SendReaction_BroadcastsOnlyToCurrentGroupWithServerIdentity()
+    {
+        var harness = new ManagerHarness();
+        var second = harness.CreateSession("session-2");
+        var outsider = harness.CreateSession("session-3");
+        var group = harness.Manager.NewGroup(harness.Session, new NewGroupRequest("group"), CancellationToken.None);
+        harness.Manager.JoinGroup(second, new JoinGroupRequest(group.GroupId), CancellationToken.None);
+        harness.Manager.NewGroup(outsider, new NewGroupRequest("other"), CancellationToken.None);
+        harness.Session.UserName = "untrusted-session-name";
+
+        var result = await harness.Manager.SendReactionAsync(harness.Session, "heart", CancellationToken.None);
+
+        Assert.Equal(ReactionSendResult.Sent, result);
+        harness.AssertReactionSentTo("session-1", group.GroupId, "heart", harness.User.Id, "tester");
+        harness.AssertReactionSentTo("session-2", group.GroupId, "heart", harness.User.Id, "tester");
+        harness.AssertNoReactionSentTo("session-3");
+    }
+
+    [Fact]
+    public async Task SendReaction_ImmediatelyRepeated_IsRateLimited()
+    {
+        var harness = new ManagerHarness();
+        harness.Manager.NewGroup(harness.Session, new NewGroupRequest("group"), CancellationToken.None);
+
+        Assert.Equal(ReactionSendResult.Sent, await harness.Manager.SendReactionAsync(harness.Session, "like", CancellationToken.None));
+        Assert.Equal(ReactionSendResult.RateLimited, await harness.Manager.SendReactionAsync(harness.Session, "laugh", CancellationToken.None));
+        harness.AssertReactionCount("session-1", 1);
+    }
+
+    [Fact]
+    public async Task SendReaction_AfterLeavingGroup_IsNotDelivered()
+    {
+        var harness = new ManagerHarness();
+        harness.Manager.NewGroup(harness.Session, new NewGroupRequest("group"), CancellationToken.None);
+        harness.Manager.LeaveGroup(harness.Session, new LeaveGroupRequest(), CancellationToken.None);
+
+        Assert.Equal(ReactionSendResult.NotInGroup, await harness.Manager.SendReactionAsync(harness.Session, "like", CancellationToken.None));
+        harness.AssertReactionCount("session-1", 0);
+    }
+
     private sealed class ManagerHarness
     {
         private readonly Mock<ISessionManager> _sessionManager = new();
@@ -104,6 +146,9 @@ public class SyncPlayManagerTests
                 .Returns(Task.CompletedTask);
             _sessionManager
                 .Setup(m => m.SendSyncPlayGroupUpdate(It.IsAny<string>(), It.IsAny<GroupUpdate<GroupStateUpdate>>(), It.IsAny<CancellationToken>()))
+                .Returns(Task.CompletedTask);
+            _sessionManager
+                .Setup(m => m.SendSyncPlayGroupUpdate(It.IsAny<string>(), It.IsAny<GroupUpdate<ReactionData>>(), It.IsAny<CancellationToken>()))
                 .Returns(Task.CompletedTask);
 
             Manager = new SyncPlayManager(
@@ -132,6 +177,32 @@ public class SyncPlayManagerTests
                 UserId = User.Id,
                 UserName = User.Username
             };
+        }
+
+        public void AssertReactionSentTo(string sessionId, Guid groupId, string reactionId, Guid userId, string userName)
+        {
+            _sessionManager.Verify(
+                m => m.SendSyncPlayGroupUpdate(
+                    sessionId,
+                    It.Is<GroupUpdate<ReactionData>>(update => update.GroupId.Equals(groupId)
+                        && update.Type == GroupUpdateType.Reaction
+                        && update.Data.ReactionId == reactionId
+                        && update.Data.UserId.Equals(userId)
+                        && update.Data.UserName == userName),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        public void AssertNoReactionSentTo(string sessionId) => AssertReactionCount(sessionId, 0);
+
+        public void AssertReactionCount(string sessionId, int count)
+        {
+            _sessionManager.Verify(
+                m => m.SendSyncPlayGroupUpdate(
+                    sessionId,
+                    It.IsAny<GroupUpdate<ReactionData>>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Exactly(count));
         }
 
         public async Task<GroupStateType> WaitForState(SessionInfo session, Guid groupId, GroupStateType expected)

@@ -40,6 +40,11 @@ namespace MediaBrowser.Controller.SyncPlay
         public string UserName { get; }
 
         /// <summary>
+        /// Gets or sets when this session last sent a reaction.
+        /// </summary>
+        public DateTime LastReactionUtc { get; set; }
+
+        /// <summary>
         /// Gets or sets the ping, in milliseconds.
         /// </summary>
         /// <value>The ping.</value>

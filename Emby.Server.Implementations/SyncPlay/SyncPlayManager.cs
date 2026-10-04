@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.SyncPlay;
@@ -381,6 +382,35 @@ namespace Emby.Server.Implementations.SyncPlay
                 var error = new SyncPlayNotInGroupUpdate(Guid.Empty, string.Empty);
                 _sessionManager.SendSyncPlayGroupUpdate(session.Id, error, CancellationToken.None);
             }
+        }
+
+        /// <inheritdoc />
+        public async Task<ReactionSendResult> SendReactionAsync(SessionInfo session, string reactionId, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(session);
+
+            if (!_sessionToGroupMap.TryGetValue(session.Id, out var group))
+            {
+                return ReactionSendResult.NotInGroup;
+            }
+
+            Task broadcastTask;
+            lock (group)
+            {
+                if (!_sessionToGroupMap.TryGetValue(session.Id, out var currentGroup) || !ReferenceEquals(group, currentGroup))
+                {
+                    return ReactionSendResult.NotInGroup;
+                }
+
+                var result = group.TrySendReaction(session, reactionId, cancellationToken, out broadcastTask);
+                if (result != ReactionSendResult.Sent)
+                {
+                    return result;
+                }
+            }
+
+            await broadcastTask.ConfigureAwait(false);
+            return ReactionSendResult.Sent;
         }
 
         /// <inheritdoc />

@@ -282,3 +282,9 @@ mono_crash.*.json
 # Devcontainer temp files
 .devcontainer/devcontainer-lock.json
 dotnet/
+
+# Local media library for Docker Compose
+/media/
+
+# Separate local checkout of the Jellyfin Web client
+/jellyfin-web/

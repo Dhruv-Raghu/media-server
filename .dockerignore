@@ -9,3 +9,10 @@ deployment/*/dist
 deployment/*/pkg-dist
 deployment/collect-dist/
 ci/
+**/bin/
+**/obj/
+/media/
+/jellyfin-web/
+/task-history/
+/tests/
+/fuzz/

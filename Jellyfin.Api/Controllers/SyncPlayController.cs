@@ -97,6 +97,35 @@ public class SyncPlayController : BaseJellyfinApiController
     }
 
     /// <summary>
+    /// Sends a transient reaction to the current SyncPlay group.
+    /// </summary>
+    /// <param name="requestData">The reaction to send.</param>
+    /// <returns>No content when the reaction was sent.</returns>
+    [HttpPost("Reaction")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    [Authorize(Policy = Policies.SyncPlayIsInGroup)]
+    public async Task<ActionResult> SyncPlayReact([FromBody, Required] ReactionRequestDto requestData)
+    {
+        if (requestData.ReactionId is not ("like" or "heart" or "laugh" or "wow" or "clap" or "celebrate"))
+        {
+            return BadRequest("Unknown reaction.");
+        }
+
+        var currentSession = await RequestHelpers.GetSession(_sessionManager, _userManager, HttpContext).ConfigureAwait(false);
+        var result = await _syncPlayManager.SendReactionAsync(currentSession, requestData.ReactionId, HttpContext.RequestAborted).ConfigureAwait(false);
+        return result switch
+        {
+            ReactionSendResult.Sent => NoContent(),
+            ReactionSendResult.NotInGroup => Forbid(),
+            ReactionSendResult.RateLimited => StatusCode(StatusCodes.Status429TooManyRequests),
+            _ => StatusCode(StatusCodes.Status500InternalServerError)
+        };
+    }
+
+    /// <summary>
     /// Gets all SyncPlay groups.
     /// </summary>
     /// <response code="200">Groups returned.</response>

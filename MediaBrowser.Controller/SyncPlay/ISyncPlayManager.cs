@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.SyncPlay.Requests;
 using MediaBrowser.Model.SyncPlay;
@@ -62,6 +63,15 @@ namespace MediaBrowser.Controller.SyncPlay
         /// <param name="request">The request.</param>
         /// <param name="cancellationToken">The cancellation token.</param>
         void HandleRequest(SessionInfo session, IGroupPlaybackRequest request, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Sends a short-lived reaction to the session's current group.
+        /// </summary>
+        /// <param name="session">The sending session.</param>
+        /// <param name="reactionId">An allowlisted reaction identifier.</param>
+        /// <param name="cancellationToken">The cancellation token.</param>
+        /// <returns>The delivery result.</returns>
+        Task<ReactionSendResult> SendReactionAsync(SessionInfo session, string reactionId, CancellationToken cancellationToken);
 
         /// <summary>
         /// Checks whether a user has an active session using SyncPlay.

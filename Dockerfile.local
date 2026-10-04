@@ -1,0 +1,31 @@
+FROM node:24-bookworm-slim AS web-build
+
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    autoconf automake g++ git libpng-dev libtool make nasm python3 \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /web
+COPY --from=web . .
+RUN npm ci --no-audit --unsafe-perm && npm run build:development
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+COPY . .
+
+ARG TARGETARCH
+RUN case "$TARGETARCH" in \
+        amd64) rid=linux-x64 ;; \
+        arm64) rid=linux-arm64 ;; \
+        *) echo "Unsupported architecture: $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+    && dotnet publish Jellyfin.Server/Jellyfin.Server.csproj \
+        --configuration Release \
+        --runtime "$rid" \
+        --self-contained true \
+        --output /out
+
+# The upstream image provides FFmpeg and its native dependencies.
+FROM jellyfin/jellyfin:unstable
+RUN rm -rf /jellyfin && mkdir -p /jellyfin
+COPY --from=build /out/ /jellyfin/
+COPY --from=web-build /web/dist/ /jellyfin/jellyfin-web/
